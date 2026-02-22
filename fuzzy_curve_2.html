@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { font-family: Arial; }
+#chart { border: 1px solid #ccc; touch-action: none; }
+.point { fill: red; cursor: pointer; }
+.axis { stroke: black; stroke-width: 1; }
+.axis-label { font-size: 12px; text-anchor: middle; }
+</style>
+</head>
+<body>
+
+<h3>Adjust suitability curve</h3>
+<label for="func">Function:</label>
+<select id="func">
+  <option value="linear">Linear</option>
+  <option value="gaussian">Gaussian</option>
+</select>
+
+<svg id="chart" width="700" height="450"></svg>
+<p id="values"></p>
+
+<script>
+const svg = document.getElementById("chart");
+const width = 700, height = 450, padding = 50;
+let xMin=0, xMax=100, yMin=0, yMax=1;
+let draggingPoint = null;
+
+let params = {
+  linear: [
+    {x:xMin, y:0},
+    {x:xMax, y:1}
+  ],
+  gaussian: [
+    {x:20,y:0.2}, // left
+    {x:50,y:1},   // peak
+    {x:80,y:0.2}  // right
+  ]
+};
+
+function scaleX(x){ return padding + (x - xMin)/(xMax-xMin)*(width-2*padding); }
+function scaleY(y){ return height-padding - (y - yMin)/(yMax-yMin)*(height-2*padding); }
+function unscaleX(px){ return xMin + ((px-padding)/(width-2*padding))*(xMax-xMin); }
+function unscaleY(py){ return yMin + ((height-padding-py)/(height-2*padding))*(yMax-yMin); }
+
+function drawAxes(){
+  const xAxis = document.createElementNS("http://www.w3.org/2000/svg","line");
+  xAxis.setAttribute("x1", scaleX(xMin)); xAxis.setAttribute("y1", scaleY(yMin));
+  xAxis.setAttribute("x2", scaleX(xMax)); xAxis.setAttribute("y2", scaleY(yMin));
+  xAxis.setAttribute("class","axis"); svg.appendChild(xAxis);
+
+  const yAxis = document.createElementNS("http://www.w3.org/2000/svg","line");
+  yAxis.setAttribute("x1", scaleX(xMin)); yAxis.setAttribute("y1", scaleY(yMin));
+  yAxis.setAttribute("x2", scaleX(xMin)); yAxis.setAttribute("y2", scaleY(yMax));
+  yAxis.setAttribute("class","axis"); svg.appendChild(yAxis);
+
+  for(let i=xMin;i<=xMax;i+=20){
+    const tick = document.createElementNS("http://www.w3.org/2000/svg","line");
+    tick.setAttribute("x1", scaleX(i)); tick.setAttribute("y1", scaleY(yMin)-5);
+    tick.setAttribute("x2", scaleX(i)); tick.setAttribute("y2", scaleY(yMin)+5);
+    tick.setAttribute("class","axis"); svg.appendChild(tick);
+    const label = document.createElementNS("http://www.w3.org/2000/svg","text");
+    label.setAttribute("x", scaleX(i)); label.setAttribute("y", scaleY(yMin)+20);
+    label.setAttribute("class","axis-label"); label.textContent = i;
+    svg.appendChild(label);
+  }
+  for(let i=0;i<=1;i+=0.2){
+    const tick = document.createElementNS("http://www.w3.org/2000/svg","line");
+    tick.setAttribute("x1", scaleX(xMin)-5); tick.setAttribute("y1", scaleY(i));
+    tick.setAttribute("x2", scaleX(xMin)+5); tick.setAttribute("y2", scaleY(i));
+    tick.setAttribute("class","axis"); svg.appendChild(tick);
+    const label = document.createElementNS("http://www.w3.org/2000/svg","text");
+    label.setAttribute("x", scaleX(xMin)-10); label.setAttribute("y", scaleY(i)+4);
+    label.setAttribute("class","axis-label"); label.textContent = i.toFixed(1);
+    svg.appendChild(label);
+  }
+
+  const xTitle = document.createElementNS("http://www.w3.org/2000/svg","text");
+  xTitle.setAttribute("x", scaleX((xMin+xMax)/2)); xTitle.setAttribute("y", height-10);
+  xTitle.setAttribute("class","axis-label"); xTitle.textContent = "Variable"; svg.appendChild(xTitle);
+
+  const yTitle = document.createElementNS("http://www.w3.org/2000/svg","text");
+  yTitle.setAttribute("x",15); yTitle.setAttribute("y",scaleY((yMin+yMax)/2));
+  yTitle.setAttribute("transform",`rotate(-90 15,${scaleY((yMin+yMax)/2)})`);
+  yTitle.setAttribute("class","axis-label"); yTitle.textContent = "Suitability"; svg.appendChild(yTitle);
+}
+
+function computeCurve(type){
+  const pts = params[type];
+  const res = [];
+  if(type==="linear"){
+    const p1=pts[0], p2=pts[1];
+    for(let x=xMin; x<=xMax; x+=1){
+      let y = p1.y + (p2.y-p1.y)*(x-p1.x)/(p2.x-p1.x);
+      y = Math.max(0,Math.min(1,y)); // clip to 0-1
+      res.push({x:x,y:y});
+    }
+  } else if(type==="gaussian"){
+    const left=pts[0], peak=pts[1], right=pts[2];
+    const mu = peak.x;
+    const y0 = peak.y;
+    const sigmaLeft = Math.abs(mu - left.x)/Math.sqrt(-2*Math.log(Math.max(left.y/y0,0.01)));
+    const sigmaRight = Math.abs(right.x - mu)/Math.sqrt(-2*Math.log(Math.max(right.y/y0,0.01)));
+    const sigma = (sigmaLeft + sigmaRight)/2;
+    for(let x=xMin; x<=xMax; x+=1){
+      let y = y0*Math.exp(-Math.pow(x-mu,2)/(2*sigma*sigma));
+      y = Math.max(0,Math.min(1,y));
+      res.push({x:x,y:y});
+    }
+  }
+  return res;
+}
+
+function drawCurve(){
+  svg.innerHTML="";
+  drawAxes();
+  const funcType = document.getElementById("func").value;
+  const curvePts = computeCurve(funcType);
+
+  let path = "M "+scaleX(curvePts[0].x)+" "+scaleY(curvePts[0].y);
+  for(let i=1;i<curvePts.length;i++) path+=" L "+scaleX(curvePts[i].x)+" "+scaleY(curvePts[i].y);
+  const curve = document.createElementNS("http://www.w3.org/2000/svg","path");
+  curve.setAttribute("d",path); curve.setAttribute("stroke","black");
+  curve.setAttribute("fill","none"); curve.setAttribute("stroke-width","2");
+  svg.appendChild(curve);
+
+  params[funcType].forEach((p,i)=>{
+    const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
+    c.setAttribute("cx",scaleX(p.x)); c.setAttribute("cy",scaleY(p.y));
+    c.setAttribute("r",8); c.setAttribute("class","point");
+    c.addEventListener("pointerdown",()=>draggingPoint=i);
+    svg.appendChild(c);
+  });
+
+  document.getElementById("values").textContent=
+    "Points: "+JSON.stringify(params[funcType].map(p=>({x:p.x.toFixed(1),y:p.y.toFixed(2)})));
+}
+
+svg.addEventListener("pointermove",e=>{
+  if(draggingPoint===null) return;
+  const funcType=document.getElementById("func").value;
+  const rect=svg.getBoundingClientRect();
+  let x = Math.max(xMin,Math.min(xMax,unscaleX(e.clientX-rect.left)));
+  let y = Math.max(yMin,Math.min(yMax,unscaleY(e.clientY-rect.top)));
+
+  if(funcType==="linear"){
+    if(draggingPoint===0){
+      x = Math.min(x, params.linear[1].x-1);
+      y = Math.max(0, Math.min(1,y));
+      params.linear[0]={x:x,y:y};
+    } else {
+      x = Math.max(x, params.linear[0].x+1);
+      y = Math.max(0, Math.min(1,y));
+      params.linear[1]={x:x,y:y};
+    }
+  } else if(funcType==="gaussian"){
+    if(draggingPoint===0){
+      x = Math.min(x, params.gaussian[1].x-1);
+      y = Math.max(0, Math.min(1,y));
+    } else if(draggingPoint===1){
+      x = Math.max(params.gaussian[0].x+1, Math.min(x, params.gaussian[2].x-1));
+      y = Math.max(0, Math.min(1,y));
+    } else if(draggingPoint===2){
+      x = Math.max(x, params.gaussian[1].x+1);
+      y = Math.max(0, Math.min(1,y));
+    }
+    params.gaussian[draggingPoint]={x:x,y:y};
+  }
+
+  drawCurve();
+});
+
+svg.addEventListener("pointerup",()=>draggingPoint=null);
+svg.addEventListener("pointerleave",()=>draggingPoint=null);
+
+document.getElementById("func").onchange = drawCurve;
+drawCurve();
+</script>
+</body>
+</html>
