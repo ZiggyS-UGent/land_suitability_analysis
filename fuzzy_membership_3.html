@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { font-family: Arial; }
+#chart { border: 1px solid #ccc; touch-action: none; }
+.point { fill: red; cursor: pointer; }
+.axis { stroke: black; stroke-width: 1; }
+.axis-label { font-size: 12px; text-anchor: middle; }
+#output { margin-top: 10px; font-family: monospace; }
+button { margin-top: 5px; }
+</style>
+</head>
+<body>
+
+<h3>Soil clay content</h3>
+<label for="func">Function:</label>
+<select id="func">
+  <option value="linear">Linear</option>
+  <option value="linearInv">Inverted Linear</option>
+  <option value="gaussian">Gaussian</option>
+</select>
+
+<svg id="chart" width="700" height="450"></svg>
+
+<div id="output"></div>
+<button id="copyBtn">Copy Values</button>
+
+<script>
+const svg = document.getElementById("chart");
+const outputDiv = document.getElementById("output");
+const copyBtn = document.getElementById("copyBtn");
+
+const width = 700, height = 450, padding = 50;
+let xMin = 0, xMax = 100, yMin = 0, yMax = 1;
+let draggingPoint = null;
+
+let params = {
+  linear: [
+    {x:xMin, y:0},
+    {x:xMax, y:1}
+  ],
+  linearInv: [
+    {x:xMin, y:1},
+    {x:xMax, y:0}
+  ],
+  gaussian: [
+    {x:50,y:1},   // peak
+    {x:80,y:0.2}  // free side point
+  ]
+};
+
+function scaleX(x){ return padding + (x - xMin)/(xMax-xMin)*(width-2*padding); }
+function scaleY(y){ return height-padding - (y - yMin)/(yMax-yMin)*(height-2*padding); }
+function unscaleX(px){ return xMin + ((px-padding)/(width-2*padding))*(xMax-xMin); }
+function unscaleY(py){ return yMin + ((height-padding-py)/(height-2*padding))*(yMax-yMin); }
+
+function drawAxes(){
+  svg.innerHTML = "";
+  // axes
+  const axes = [
+    [scaleX(xMin), scaleY(yMin), scaleX(xMax), scaleY(yMin)],
+    [scaleX(xMin), scaleY(yMin), scaleX(xMin), scaleY(yMax)]
+  ];
+  axes.forEach(a => {
+    const l = document.createElementNS("http://www.w3.org/2000/svg","line");
+    l.setAttribute("x1", a[0]); l.setAttribute("y1", a[1]);
+    l.setAttribute("x2", a[2]); l.setAttribute("y2", a[3]);
+    l.setAttribute("class","axis"); svg.appendChild(l);
+  });
+
+  // X-axis ticks
+  for(let i=xMin; i<=xMax; i+=20){
+    const tick = document.createElementNS("http://www.w3.org/2000/svg","line");
+    tick.setAttribute("x1", scaleX(i)); tick.setAttribute("y1", scaleY(yMin)-5);
+    tick.setAttribute("x2", scaleX(i)); tick.setAttribute("y2", scaleY(yMin)+5);
+    tick.setAttribute("class","axis"); svg.appendChild(tick);
+    const label = document.createElementNS("http://www.w3.org/2000/svg","text");
+    label.setAttribute("x", scaleX(i)); label.setAttribute("y", scaleY(yMin)+20);
+    label.setAttribute("class","axis-label"); label.textContent = i;
+    svg.appendChild(label);
+  }
+
+  // Y-axis ticks with whitespace fix
+  for(let i=yMin; i<=yMax; i+=0.2){
+    const tick = document.createElementNS("http://www.w3.org/2000/svg","line");
+    tick.setAttribute("x1", scaleX(xMin)-5); tick.setAttribute("y1", scaleY(i));
+    tick.setAttribute("x2", scaleX(xMin)+5); tick.setAttribute("y2", scaleY(i));
+    tick.setAttribute("class","axis"); svg.appendChild(tick);
+    const label = document.createElementNS("http://www.w3.org/2000/svg","text");
+    label.setAttribute("x", scaleX(xMin)-20); label.setAttribute("y", scaleY(i)+4); // whitespace fix
+    label.setAttribute("class","axis-label"); label.textContent = i.toFixed(1);
+    svg.appendChild(label);
+  }
+
+  // axis titles
+  const xTitle = document.createElementNS("http://www.w3.org/2000/svg","text");
+  xTitle.setAttribute("x", scaleX((xMin+xMax)/2)); xTitle.setAttribute("y", height-10);
+  xTitle.setAttribute("class","axis-label"); xTitle.textContent = "Variable"; svg.appendChild(xTitle);
+  const yTitle = document.createElementNS("http://www.w3.org/2000/svg","text");
+  yTitle.setAttribute("x",15); yTitle.setAttribute("y",scaleY((yMin+yMax)/2));
+  yTitle.setAttribute("transform",`rotate(-90 15,${scaleY((yMin+yMax)/2)})`);
+  yTitle.setAttribute("class","axis-label"); yTitle.textContent = "Suitability"; svg.appendChild(yTitle);
+}
+
+function computeCurve(type){
+  const res = [];
+  if(type==="linear" || type==="linearInv"){
+    const p = params[type];
+    for(let x=xMin;x<=xMax;x+=1){
+      let y;
+      if(type==="linear"){
+        if(x<=p[0].x) y=0;
+        else if(x>=p[1].x) y=1;
+        else y=(x-p[0].x)/(p[1].x-p[0].x);
+      } else {
+        if(x<=p[0].x) y=1;
+        else if(x>=p[1].x) y=0;
+        else y=1-(x-p[0].x)/(p[1].x-p[0].x);
+      }
+      res.push({x:x,y:y});
+    }
+  } else if(type==="gaussian"){
+    const peak=params.gaussian[0];
+    const side=params.gaussian[1];
+    const mu = peak.x;
+    const y0 = peak.y;
+    const sigma = Math.abs(side.x - mu)/Math.sqrt(-2*Math.log(Math.max(side.y/y0,0.01)));
+    for(let x=xMin;x<=xMax;x+=1){
+      let y = y0*Math.exp(-Math.pow(x-mu,2)/(2*sigma*sigma));
+      y=Math.max(0,Math.min(1,y));
+      res.push({x:x,y:y});
+    }
+  }
+  return res;
+}
+
+function updateOutput(){
+  const funcType=document.getElementById("func").value;
+  if(funcType==="linear" || funcType==="linearInv"){
+    const min=params[funcType][0].x.toFixed(1);
+    const max=params[funcType][1].x.toFixed(1);
+    outputDiv.textContent=`${funcType} range: min=${min}, max=${max}`;
+  } else if(funcType==="gaussian"){
+    const peak=params.gaussian[0];
+    const side=params.gaussian[1];
+    const mu=peak.x.toFixed(1);
+    const sigma=Math.abs(side.x-peak.x)/Math.sqrt(-2*Math.log(Math.max(side.y/peak.y,0.01)));
+    outputDiv.textContent=`Gaussian: midpoint=${mu}, spread=${sigma.toFixed(2)}`;
+  }
+}
+
+function drawCurve(){
+  drawAxes();
+  const funcType=document.getElementById("func").value;
+  const curvePts=computeCurve(funcType);
+
+  let path="M "+scaleX(curvePts[0].x)+" "+scaleY(curvePts[0].y);
+  for(let i=1;i<curvePts.length;i++)
+    path+=" L "+scaleX(curvePts[i].x)+" "+scaleY(curvePts[i].y);
+  const curve=document.createElementNS("http://www.w3.org/2000/svg","path");
+  curve.setAttribute("d",path);
+  curve.setAttribute("stroke","black");
+  curve.setAttribute("fill","none");
+  curve.setAttribute("stroke-width","2");
+  svg.appendChild(curve);
+
+  // draw points
+  params[funcType]?.forEach((p,i)=>{
+    const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+    c.setAttribute("cx",scaleX(p.x));
+    c.setAttribute("cy",scaleY(p.y));
+    c.setAttribute("r",8); c.setAttribute("class","point");
+    c.addEventListener("pointerdown",()=>draggingPoint=i);
+    svg.appendChild(c);
+  });
+  updateOutput();
+}
+
+svg.addEventListener("pointermove",e=>{
+  if(draggingPoint===null) return;
+  const funcType=document.getElementById("func").value;
+  const rect=svg.getBoundingClientRect();
+  let x=Math.max(xMin,Math.min(xMax,unscaleX(e.clientX-rect.left)));
+  let y=Math.max(yMin,Math.min(yMax,unscaleY(e.clientY-rect.top)));
+
+  if(funcType==="linear" || funcType==="linearInv"){
+    if(draggingPoint===0){
+      x=Math.min(x,params[funcType][1].x-1);
+      y=params[funcType][0].y;
+      params[funcType][0]={x:x,y:y};
+    } else {
+      x=Math.max(x,params[funcType][0].x+1);
+      y=params[funcType][1].y;
+      params[funcType][1]={x:x,y:y};
+    }
+  } else if(funcType==="gaussian"){
+    if(draggingPoint===0){
+      // peak moves left/right, y=1
+      params.gaussian[0]={x:x,y:1};
+    } else if(draggingPoint===1){
+      // free side point moves freely
+      params.gaussian[1]={x:x,y:y};
+    }
+  }
+
+  drawCurve();
+});
+
+svg.addEventListener("pointerup",()=>draggingPoint=null);
+svg.addEventListener("pointerleave",()=>draggingPoint=null);
+
+document.getElementById("func").onchange=drawCurve;
+copyBtn.addEventListener("click",()=>{
+  navigator.clipboard.writeText(outputDiv.textContent)
+    .then(()=>alert("Values copied to clipboard!"))
+    .catch(()=>alert("Failed to copy."));
+});
+
+drawCurve();
+</script>
+</body>
+</html>
