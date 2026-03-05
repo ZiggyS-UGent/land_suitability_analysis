@@ -35,7 +35,6 @@ body {
 }
 .section-title {
   font-size: 16px;
-  font-weight: bold;
   margin-bottom: 6px;
 }
 #summary {
@@ -57,7 +56,7 @@ In this section, you will define how each geo-ecological variable relates to opt
 <br><br>
 The graph displays the variable on the x-axis and suitability (%) on the y-axis. Suitability expresses the degree to which a given value represents optimal conditions for woody vegetation: 100% indicates the most optimal conditions, whereas 0% indicates the least optimal conditions.
 <br><br>
-For each variable, select the function that best represents your professional judgement and adjust it by dragging the red control points to specify the range and degree of suitability for woody vegetation.
+For each variable, select the function that best represents your professional judgement and adjust it by dragging the red control points to specify the range and degree of suitability. <b>When defining the suitability function for a specific variable, assume that all other variables are already at their optimal conditions.</b>
 </div>
 <div id="graphs"></div>
 <div>
@@ -65,27 +64,46 @@ For each variable, select the function that best represents your professional ju
   <div id="summary"></div>
 </div>
 <script>
-const variables = ["Soil clay content","Soil organic content","Slope","Soil moisture","Solar exposure"];
-const axisMax = {"Soil clay content":50,"Soil organic content":15,"Slope":20,"Soil moisture":50,"Solar exposure":100};
+const variables = ["Soil clay content","Soil organic content","Slope","Soil moisture","Solar radiation"];
+
+const axisMax = {"Soil clay content":50,"Soil organic content":15,"Slope":20,"Soil moisture":50,"Solar radiation":100};
+
+const explanations = {
+    "Soil clay content": "The proportion of mineral particles smaller than 0.002 mm in the soil.",
+    "Soil organic content": "The proportion of organic matter in the soil.",
+    "Slope": "The angular inclination of the land surface relative to the horizontal plane.",
+    "Soil moisture": "A relative measure of the water content of the soil.",
+    "Solar radiation": "A relative measure of the total incoming solar energy at the land surface."
+};
+
 const width = 700, height = 450, padding = 60;
 const xMin = 0, xMax = 100, yMin = 0, yMax = 1, sigmaMin = 1.0;
 const graphObjects = [];
+
 function createGraph(variableName) {
   const displayMax = axisMax[variableName];
   const container = document.createElement("div"); container.className="graph-container";
-  const title = document.createElement("div"); title.className="section-title"; title.textContent=variableName; container.appendChild(title);
+  
+  const title = document.createElement("div"); 
+  title.className="section-title"; 
+  title.innerHTML = `<b>${variableName}</b>: ${explanations[variableName]}`; 
+  container.appendChild(title);
+
   const selectLabel = document.createElement("label"); selectLabel.textContent="Function: ";
   const select = document.createElement("select");
   ["gaussian","linear","linearInv"].forEach(opt=>{ const o=document.createElement("option"); o.value=opt; o.textContent=opt; select.appendChild(o); });
   selectLabel.appendChild(select); container.appendChild(selectLabel);
   const svg=document.createElementNS("http://www.w3.org/2000/svg","svg"); svg.setAttribute("width",width); svg.setAttribute("height",height+30); container.appendChild(svg);
   document.getElementById("graphs").appendChild(container);
+  
   let draggingPoint=null;
   let params={linear:[{x:20,y:0},{x:80,y:1}],linearInv:[{x:20,y:1},{x:80,y:0}],gaussian:[{x:50,y:1},{x:70,y:0.2}]};
+  
   function scaleX(x){ return padding + (x-xMin)/(xMax-xMin)*(width-2*padding); }
   function scaleY(y){ return height-padding-(y-yMin)/(yMax-yMin)*(height-2*padding); }
   function unscaleX(px){ return xMin + ((px-padding)/(width-2*padding))*(xMax-xMin); }
   function unscaleY(py){ return yMin + ((height-padding-py)/(height-2*padding)); }
+  
   function drawAxes(){
     svg.innerHTML="";
     [[scaleX(xMin),scaleY(yMin),scaleX(xMax),scaleY(yMin)],[scaleX(xMin),scaleY(yMin),scaleX(xMin),scaleY(yMax)]].forEach(a=>{
@@ -95,8 +113,9 @@ function createGraph(variableName) {
     if(variableName==="Slope") tickValues=[0,2,8,15,displayMax];
     else if(variableName==="Soil organic content") tickValues=[0,1,3,6,10,displayMax];
     else if(variableName==="Soil moisture") tickValues=[0,15,25,35,45,50];
-    else if(variableName==="Solar exposure") tickValues=[0,20,40,60,80,100];
+    else if(variableName==="Solar radiation") tickValues=[0,20,40,60,80,100];
     else { tickValues=[]; for(let i=0;i<=5;i++) tickValues.push((displayMax/5)*i); }
+    
     tickValues.forEach(val=>{
         const pos = (val/displayMax)*100;
         const tick=document.createElementNS("http://www.w3.org/2000/svg","line");
@@ -106,18 +125,21 @@ function createGraph(variableName) {
         if(variableName==="Slope") label.textContent=val+"°"; else label.textContent=val+"%";
         svg.appendChild(label);
     });
+
     let linguisticClasses=[];
     if(variableName==="Soil clay content") linguisticClasses=[{label:"Very Low", start:0,end:10},{label:"Low", start:10,end:20},{label:"Medium", start:20,end:30},{label:"High", start:30,end:40},{label:"Very High", start:40,end:50}];
     else if(variableName==="Soil organic content") linguisticClasses=[{label:"Very Low", start:0,end:1},{label:"Low", start:1,end:3},{label:"Medium", start:3,end:6},{label:"High", start:6,end:10},{label:"Very High", start:10,end:15}];
     else if(variableName==="Slope") linguisticClasses=[{label:"Flat", start:0,end:2},{label:"Gentle", start:2,end:8},{label:"Moderate", start:8,end:15},{label:"Steep", start:15,end:20}];
     else if(variableName==="Soil moisture") linguisticClasses=[{label:"Very Dry", start:0,end:15},{label:"Dry", start:15,end:25},{label:"Medium", start:25,end:35},{label:"Wet", start:35,end:45},{label:"Very Wet", start:45,end:50}];
-    else if(variableName==="Solar exposure") linguisticClasses=[{label:"Very Low", start:0,end:20},{label:"Low", start:20,end:40},{label:"Medium", start:40,end:60},{label:"High", start:60,end:80},{label:"Very High", start:80,end:100}];
+    else if(variableName==="Solar radiation") linguisticClasses=[{label:"Very Low", start:0,end:20},{label:"Low", start:20,end:40},{label:"Medium", start:40,end:60},{label:"High", start:60,end:80},{label:"Very High", start:80,end:100}];
+    
     linguisticClasses.forEach(cls=>{
         const pos=((cls.start+cls.end)/2/displayMax)*100;
         const label=document.createElementNS("http://www.w3.org/2000/svg","text");
         label.setAttribute("x",scaleX(pos)); label.setAttribute("y",scaleY(yMin)+48); label.setAttribute("class","linguistic-label"); label.textContent=cls.label;
         svg.appendChild(label);
     });
+
     for(let i=0;i<=1;i+=0.2){
       const y=scaleY(i);
       const tick=document.createElementNS("http://www.w3.org/2000/svg","line");
@@ -129,14 +151,15 @@ function createGraph(variableName) {
     const xTitle=document.createElementNS("http://www.w3.org/2000/svg","text");
     xTitle.setAttribute("x",scaleX(50)); xTitle.setAttribute("y",height+18); xTitle.setAttribute("class","axis-label");
     xTitle.textContent=(variableName==="Slope")?variableName+" (°)":variableName+" (%)"; svg.appendChild(xTitle);
+    
     const yTitle=document.createElementNS("http://www.w3.org/2000/svg","text");
     yTitle.setAttribute("x", scaleX(xMin)); yTitle.setAttribute("y", padding - 25); yTitle.setAttribute("text-anchor","start"); yTitle.setAttribute("class","axis-label"); yTitle.textContent="Suitability (%)"; svg.appendChild(yTitle);
   }
+  
   function computeCurve(type){
     const res=[];
     if(type==="linear"||type==="linearInv"){
       const p=params[type];
-      // Draw as a ramp with clamping
       for(let x=0;x<=100;x++){
         let y=(x-p[0].x)/(p[1].x-p[0].x)*(p[1].y-p[0].y) + p[0].y;
         y=Math.max(0,Math.min(1,y));
@@ -149,6 +172,7 @@ function createGraph(variableName) {
     }
     return res;
   }
+  
   function drawCurve(){
     drawAxes();
     const pts=computeCurve(select.value);
@@ -163,6 +187,7 @@ function createGraph(variableName) {
     });
     updateSummary();
   }
+  
   svg.addEventListener("pointermove",e=>{
     if(draggingPoint===null) return;
     const rect=svg.getBoundingClientRect();
@@ -185,9 +210,11 @@ function createGraph(variableName) {
     }
     drawCurve();
   });
+  
   svg.addEventListener("pointerup",()=>draggingPoint=null);
   svg.addEventListener("pointerleave",()=>draggingPoint=null);
   select.onchange=drawCurve;
+  
   graphObjects.push({
     variable:variableName,
     getParameters(){
@@ -205,7 +232,9 @@ function createGraph(variableName) {
   });
   drawCurve();
 }
+
 variables.forEach(v=>createGraph(v));
+
 function updateSummary(){
   const summary=document.getElementById("summary"); let txt="";
   graphObjects.forEach(g=>{ txt+=`${g.variable}: ${g.getParameters()}\n`; });
