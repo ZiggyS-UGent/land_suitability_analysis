@@ -22,6 +22,11 @@ body{
     line-height:1.5;
 }
 
+/* New class to make the variables text smaller */
+.variables-list {
+    font-size: 0.9em; 
+}
+
 .comparison{
     margin: 26px 0;
 }
@@ -121,13 +126,15 @@ The variables represent key aspects of soil, landform, hydrology, and climate:
 
 <br><br>
 
-- Soil clay content<br>
-- Soil organic content<br>
-- Slope<br>
-- Soil moisture<br>
-- Solar exposure
+<div class="variables-list">
+- <b>Soil clay content (%)</b>: The proportion of mineral particles smaller than 0.002 mm in the soil.<br>
+- <b>Soil organic content (%)</b>: The proportion of organic matter in the soil.<br>
+- <b>Slope (°)</b>: The angular inclination of the land surface relative to the horizontal plane.<br>
+- <b>Soil moisture (%)</b>: A relative measure of the water content of the soil derived from the Topographic Wetness Index.<br>
+- <b>Solar exposure (%)</b>: A relative measure of the total incoming solar energy at the land surface.  
+</div>
 
-<br><br>
+<br>
 
 For each pair of variables, indicate which one is more important for achieving optimal conditions for arable crop production. Use the slider to show the degree of importance in each pairwise comparison.
 </div>
